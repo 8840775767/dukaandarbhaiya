@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dukaan & Mobile Repair Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Firebase SDKs (v8) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #printableReceipt, #printableReceipt * { visibility: visible; }
+      #printableReceipt { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 pb-20">
+
+  <!-- ================= AUTH SCREEN (LOGIN / SIGNUP) ================= -->
+  <div id="authScreen" class="min-h-screen flex items-center justify-center p-4 bg-slate-900">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 sm:p-8">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl mb-3 shadow-lg shadow-blue-500/30">
+          <i class="fa-solid fa-screwdriver-wrench"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-800">Mobile Dukaan Manager</h1>
+        <p class="text-xs text-slate-500 mt-1">Apna hisaab-kitab cloud par surakshit rakhein</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-slate-200 mb-6">
+        <button id="tabLogin" onclick="toggleAuthTab('login')" class="flex-1 py-2 font-semibold text-blue-600 border-b-2 border-blue-600 text-center">Login</button>
+        <button id="tabSignup" onclick="toggleAuthTab('signup')" class="flex-1 py-2 font-semibold text-slate-400 text-center">Naya Account Banayein</button>
+      </div>
+
+      <!-- Auth Form -->
+      <form id="authForm" onsubmit="handleAuth(event)" class="space-y-4">
+        <div id="shopNameField" class="hidden">
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Dukaan Ka Naam</label>
+          <input type="text" id="authShopName" placeholder="e.g. Sharma Mobile & Repairing" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Mobile / Email ID</label>
+          <input type="text" id="authEmail" required placeholder="Mobile No ya Email dalein" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+          <p class="text-[10px] text-slate-400 mt-1">*Agar sirf phone no daalenge to auto-login email ban jaayega.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+          <input type="password" id="authPassword" required placeholder="Kam se kam 6 akshar" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <p id="authError" class="text-red-500 text-xs hidden"></p>
+
+        <button type="submit" id="authSubmitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition duration-200 text-sm shadow">
+          Login Karein
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MAIN APP SCREEN ================= -->
+  <div id="mainApp" class="hidden">
+    <!-- Header -->
+    <header class="bg-blue-600 text-white p-4 sticky top-0 z-30 shadow-md flex justify-between items-center">
+      <div>
+        <h1 id="topShopName" class="font-bold text-lg leading-tight">Meri Mobile Dukaan</h1>
+        <p class="text-[11px] text-blue-200 flex items-center gap-1">
+          <i class="fa-solid fa-cloud-arrow-up text-emerald-300"></i> Cloud Auto-Sync Active
+        </p>
+      </div>
+      <button onclick="logout()" title="Logout" class="bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
+        <i class="fa-solid fa-right-from-bracket"></i> Logout
+      </button>
+    </header>
+
+    <!-- App Views -->
+    <main class="max-w-2xl mx-auto p-4 space-y-4">
+      
+      <!-- 1. REPAIR SERVICE TAB -->
+      <section id="viewRepair" class="app-view space-y-4">
+        <!-- New Repair Form -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <h2 class="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-wrench text-blue-600"></i> Naya Mobile Repair Jama Karein
+          </h2>
+          <form onsubmit="addRepairOrder(event)" class="grid grid-cols-2 gap-3 text-xs">
+            <div class="col-span-2 sm:col-span-1">
+              <label class="font-semibold text-slate-600">Customer Naam *</label>
+              <input type="text" id="custName" required placeholder="Ramesh Kumar" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="font-semibold text-slate-600">Customer Mobile No *</label>
+              <input type="tel" id="custPhone" required placeholder="9876543210" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="font-semibold text-slate-600">Mobile Model *</label>
+              <input type="text" id="phoneModel" required placeholder="Vivo Y20 / Redmi 9" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="font-semibold text-slate-600">Problem (Kharabi) *</label>
+              <input type="text" id="phoneProblem" required placeholder="Display tuta hai / Charging band" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div>
+              <label class="font-semibold text-slate-600">Apna Kharcha (Cost) ₹</label>
+              <input type="number" id="repairCost" required placeholder="e.g. 500" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div>
+              <label class="font-semibold text-slate-600">Customer Ka Daam ₹ *</label>
+              <input type="number" id="repairPrice" required placeholder="e.g. 900" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div class="col-span-2">
+              <label class="font-semibold text-slate-600">Advance Jama ₹</label>
+              <input type="number" id="repairAdvance" value="0" class="w-full p-2 border rounded mt-1">
+            </div>
+            <button type="submit" class="col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg mt-2 text-sm shadow">
+              <i class="fa-solid fa-plus-circle"></i> Jama Karein & Cloud Save
+            </button>
+          </form>
+        </div>
+
+        <!-- Orders List -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <h2 class="font-bold text-slate-700 text-sm mb-3">Pichle Repair Orders</h2>
+          <div id="repairList" class="space-y-3">
+            <p class="text-xs text-slate-400 text-center py-4">Koi order nahi hai.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. INVENTORY (STOCK) TAB -->
+      <section id="viewStock" class="app-view hidden space-y-4">
+        <!-- Add Item Form -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <h2 class="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-boxes-stacked text-emerald-600"></i> Naya Maal Entry (Stock)
+          </h2>
+          <form onsubmit="addStockItem(event)" class="grid grid-cols-2 gap-3 text-xs">
+            <div class="col-span-2">
+              <label class="font-semibold text-slate-600">Samaan Ka Naam *</label>
+              <input type="text" id="itemName" required placeholder="e.g. Redmi 9 Combo / Fast Charger" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div>
+              <label class="font-semibold text-slate-600">Total Quantity (Ginti) *</label>
+              <input type="number" id="itemQty" required placeholder="e.g. 5" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div>
+              <label class="font-semibold text-slate-600">Khareed Rate (Cost) ₹ *</label>
+              <input type="number" id="itemCost" required placeholder="e.g. 600" class="w-full p-2 border rounded mt-1">
+            </div>
+            <div class="col-span-2">
+              <label class="font-semibold text-slate-600">Bechne Ka Rate (Sell Price) ₹ *</label>
+              <input type="number" id="itemPrice" required placeholder="e.g. 950" class="w-full p-2 border rounded mt-1">
+            </div>
+            <button type="submit" class="col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg mt-2 text-sm shadow">
+              <i class="fa-solid fa-box-open"></i> Stock Mein Jodein
+            </button>
+          </form>
+        </div>
+
+        <!-- Inventory List -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <h2 class="font-bold text-slate-700 text-sm mb-3">Dukaan Ka Stock (Maal List)</h2>
+          <div id="stockList" class="space-y-2">
+            <p class="text-xs text-slate-400 text-center py-4">Stock khali hai.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. HISAB-KITAB & PROFIT TAB -->
+      <section id="viewReport" class="app-view hidden space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center">
+            <p class="text-[11px] font-semibold text-blue-600">Kul Bikri (Total Sales)</p>
+            <h3 id="statSales" class="text-xl font-bold text-slate-800 mt-1">₹0</h3>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center">
+            <p class="text-[11px] font-semibold text-emerald-600">Kul Munafa (Net Profit)</p>
+            <h3 id="statProfit" class="text-xl font-bold text-emerald-700 mt-1">₹0</h3>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <h2 class="font-bold text-slate-700 text-sm mb-3">Haal Hi Ki Bikri & Munafa</h2>
+          <div id="salesLogList" class="space-y-2 text-xs">
+            <p class="text-slate-400 text-center py-3">Abhi koi bikri record nahi hai.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-2 flex justify-around text-slate-500 z-30">
+      <button onclick="switchTab('repair')" id="navRepair" class="flex flex-col items-center text-blue-600 font-bold text-[11px]">
+        <i class="fa-solid fa-screwdriver-wrench text-lg mb-0.5"></i> Repairing
+      </button>
+      <button onclick="switchTab('stock')" id="navStock" class="flex flex-col items-center text-slate-500 font-semibold text-[11px]">
+        <i class="fa-solid fa-boxes-stacked text-lg mb-0.5"></i> Maal Stock
+      </button>
+      <button onclick="switchTab('report')" id="navReport" class="flex flex-col items-center text-slate-500 font-semibold text-[11px]">
+        <i class="fa-solid fa-chart-line text-lg mb-0.5"></i> Munafa Hisab
+      </button>
+    </nav>
+  </div>
+
+  <!-- Print Thermal Bill Box (Hidden on screen) -->
+  <div id="printableReceipt" class="hidden p-4 font-mono text-xs bg-white text-black"></div>
+
+  <script>
+    // ===============================================================
+    // FIREBASE SETUP: Yahan apni Firebase project ki keys dalein:
+    // ===============================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyYOUR_API_KEY_HERE",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:abcdef12345"
+    };
+
+    // Firebase initialize
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentUser = null;
+    let shopProfile = { name: "Meri Mobile Dukaan" };
+    let appData = {
+      repairs: [],
+      stock: [],
+      sales: []
+    };
+
+    // Auth State Listener
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        currentUser = user;
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        loadUserDataFromCloud();
+      } else {
+        currentUser = null;
+        document.getElementById('mainApp').classList.add('hidden');
+        document.getElementById('authScreen').classList.remove('hidden');
+      }
+    });
+
+    let currentAuthMode = 'login';
+    function toggleAuthTab(mode) {
+      currentAuthMode = mode;
+      const tabLogin = document.getElementById('tabLogin');
+      const tabSignup = document.getElementById('tabSignup');
+      const shopField = document.getElementById('shopNameField');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      document.getElementById('authError').classList.add('hidden');
+
+      if (mode === 'signup') {
+        tabSignup.className = "flex-1 py-2 font-semibold text-blue-600 border-b-2 border-blue-600 text-center";
+        tabLogin.className = "flex-1 py-2 font-semibold text-slate-400 text-center";
+        shopField.classList.remove('hidden');
+        submitBtn.innerText = "Naya Khata Banayein";
+      } else {
+        tabLogin.className = "flex-1 py-2 font-semibold text-blue-600 border-b-2 border-blue-600 text-center";
+        tabSignup.className = "flex-1 py-2 font-semibold text-slate-400 text-center";
+        shopField.classList.add('hidden');
+        submitBtn.innerText = "Login Karein";
+      }
+    }
+
+    async function handleAuth(e) {
+      e.preventDefault();
+      const rawId = document.getElementById('authEmail').value.trim();
+      const pass = document.getElementById('authPassword').value;
+      const errBox = document.getElementById('authError');
+      errBox.classList.add('hidden');
+
+      // Agar user ne phone number daala hai, toh use format email banayein
+      let email = rawId;
+      if (!rawId.includes('@')) {
+        email = `${rawId.replace(/[^0-9]/g, '')}@dukaan.local`;
+      }
+
+      try {
+        if (currentAuthMode === 'signup') {
+          const shopName = document.getElementById('authShopName').value.trim() || "Meri Mobile Shop";
+          const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
+          // Initial profile create karein
+          await db.collection('users').doc(userCredential.user.uid).set({
+            shopName: shopName,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        } else {
+          await auth.signInWithEmailAndPassword(email, pass);
+        }
+      } catch (err) {
+        errBox.innerText = err.message;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    function logout() {
+      auth.signOut();
+    }
+
+    // ================= CLOUD SYNC =================
+    async function loadUserDataFromCloud() {
+      if (!currentUser) return;
+
+      // Shop Profile
+      const doc = await db.collection('users').doc(currentUser.uid).get();
+      if (doc.exists && doc.data().shopName) {
+        shopProfile.name = doc.data().shopName;
+        document.getElementById('topShopName').innerText = shopProfile.name;
+      }
+
+      // Realtime listener for Shop Data
+      db.collection('users').doc(currentUser.uid).collection('data').doc('storeData')
+        .onSnapshot((doc) => {
+          if (doc.exists) {
+            appData = doc.data();
+            appData.repairs = appData.repairs || [];
+            appData.stock = appData.stock || [];
+            appData.sales = appData.sales || [];
+          } else {
+            appData = { repairs: [], stock: [], sales: [] };
+          }
+          renderAll();
+        });
+    }
+
+    async function syncToCloud() {
+      if (!currentUser) return;
+      await db.collection('users').doc(currentUser.uid).collection('data').doc('storeData').set(appData);
+    }
+
+    // ================= REPAIR SECTION =================
+    async function addRepairOrder(e) {
+      e.preventDefault();
+      const order = {
+        id: 'REP' + Date.now().toString().slice(-6),
+        name: document.getElementById('custName').value,
+        phone: document.getElementById('custPhone').value,
+        model: document.getElementById('phoneModel').value,
+        problem: document.getElementById('phoneProblem').value,
+        cost: Number(document.getElementById('repairCost').value),
+        price: Number(document.getElementById('repairPrice').value),
+        advance: Number(document.getElementById('repairAdvance').value),
+        status: 'Jama (Pending)',
+        date: new Date().toLocaleDateString('hi-IN')
+      };
+
+      appData.repairs.unshift(order);
+      await syncToCloud();
+      e.target.reset();
+      alert("Order jama ho gaya aur Cloud par save ho gaya!");
+    }
+
+    async function completeRepair(index) {
+      const order = appData.repairs[index];
+      order.status = 'Completed';
+      
+      // Profit hisab mein jodein
+      const profit = order.price - order.cost;
+      appData.sales.unshift({
+        title: `Repair: ${order.model} (${order.name})`,
+        salePrice: order.price,
+        profit: profit,
+        date: new Date().toLocaleDateString('hi-IN')
+      });
+
+      await syncToCloud();
+    }
+
+    function sendWhatsApp(phone, model, status, balance) {
+      const msg = `Namaste! Aapka mobile *${model}* hamari dukaan par status: *${status}* hai. Baki Raashi (Balance): ₹${balance}. Dhanyawad - ${shopProfile.name}`;
+      window.open(`https://wa.me/91${phone}?text=${encodeURI(msg)}`, '_blank');
+    }
+
+    function printBill(index) {
+      const o = appData.repairs[index];
+      const receipt = document.getElementById('printableReceipt');
+      receipt.innerHTML = `
+        <div style="text-align:center; border-bottom:1px dashed #000; padding-bottom:5px;">
+          <h2 style="font-weight:bold; font-size:16px;">${shopProfile.name}</h2>
+          <p>Order ID: #${o.id}</p>
+          <p>Date: ${o.date}</p>
+        </div>
+        <div style="margin:8px 0; border-bottom:1px dashed #000; padding-bottom:5px;">
+          <p><b>Grahak:</b> ${o.name} (${o.phone})</p>
+          <p><b>Model:</b> ${o.model}</p>
+          <p><b>Samasya:</b> ${o.problem}</p>
+        </div>
+        <div style="margin:8px 0;">
+          <p>Kul Charge: ₹${o.price}</p>
+          <p>Advance Jama: ₹${o.advance}</p>
+          <p style="font-size:14px; font-weight:bold;">Baki Raashi: ₹${o.price - o.advance}</p>
+        </div>
+      `;
+      window.print();
+    }
+
+    // ================= STOCK (INVENTORY) =================
+    async function addStockItem(e) {
+      e.preventDefault();
+      const item = {
+        id: 'STK' + Date.now().toString().slice(-5),
+        name: document.getElementById('itemName').value,
+        qty: Number(document.getElementById('itemQty').value),
+        cost: Number(document.getElementById('itemCost').value),
+        price: Number(document.getElementById('itemPrice').value)
+      };
+
+      appData.stock.unshift(item);
+      await syncToCloud();
+      e.target.reset();
+      alert("Maal Stock mein jud gaya!");
+    }
+
+    async function sellStockItem(index) {
+      const item = appData.stock[index];
+      if (item.qty <= 0) {
+        alert("Stock khatam ho chuka hai!");
+        return;
+      }
+
+      // Stock 1 kam karein
+      item.qty -= 1;
+      const profit = item.price - item.cost;
+
+      // Sale log mein daalein
+      appData.sales.unshift({
+        title: `Bikri: ${item.name}`,
+        salePrice: item.price,
+        profit: profit,
+        date: new Date().toLocaleDateString('hi-IN')
+      });
+
+      await syncToCloud();
+      alert(`1 piece bik gaya! Munafa: ₹${profit}`);
+    }
+
+    // ================= RENDER FUNCTIONS =================
+    function renderAll() {
+      // 1. Render Repairs
+      const repairDiv = document.getElementById('repairList');
+      if (appData.repairs.length === 0) {
+        repairDiv.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Koi order nahi hai.</p>';
+      } else {
+        repairDiv.innerHTML = appData.repairs.map((o, i) => `
+          <div class="p-3 border rounded-lg bg-slate-50 flex flex-col gap-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="font-bold text-slate-800 text-sm">${o.name} - <span class="text-blue-600">${o.model}</span></p>
+                <p class="text-[11px] text-slate-500">Problem: ${o.problem}</p>
+                <p class="text-[11px] font-semibold text-slate-600 mt-1">Total: ₹${o.price} | Advance: ₹${o.advance} | <span class="text-red-500">Baki: ₹${o.price - o.advance}</span></p>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${o.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${o.status}</span>
+            </div>
+            <div class="flex gap-2 pt-2 border-t border-slate-200">
+              ${o.status !== 'Completed' ? `<button onclick="completeRepair(${i})" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] py-1.5 rounded font-semibold">Done (Ban Gaya)</button>` : ''}
+              <button onclick="sendWhatsApp('${o.phone}', '${o.model}', '${o.status}', '${o.price - o.advance}')" class="bg-green-600 hover:bg-green-700 text-white text-xs px-2.5 py-1.5 rounded"><i class="fa-brands fa-whatsapp"></i></button>
+              <button onclick="printBill(${i})" class="bg-slate-700 hover:bg-slate-800 text-white text-xs px-2.5 py-1.5 rounded"><i class="fa-solid fa-print"></i></button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // 2. Render Stock
+      const stockDiv = document.getElementById('stockList');
+      if (appData.stock.length === 0) {
+        stockDiv.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Stock khali hai.</p>';
+      } else {
+        stockDiv.innerHTML = appData.stock.map((s, i) => `
+          <div class="p-3 border rounded-lg bg-slate-50 flex justify-between items-center">
+            <div>
+              <p class="font-bold text-slate-800 text-sm">${s.name}</p>
+              <p class="text-[11px] text-slate-500">Rate: ₹${s.price} (Cost: ₹${s.cost}) | <span class="font-bold text-emerald-600">Munafa: ₹${s.price - s.cost}</span></p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-1 bg-slate-200 font-bold rounded text-xs">Qty: ${s.qty}</span>
+              <button onclick="sellStockItem(${i})" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded shadow">1 Bechein</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // 3. Render Reports
+      const totalSales = appData.sales.reduce((sum, s) => sum + s.salePrice, 0);
+      const totalProfit = appData.sales.reduce((sum, s) => sum + s.profit, 0);
+      document.getElementById('statSales').innerText = `₹${totalSales}`;
+      document.getElementById('statProfit').innerText = `₹${totalProfit}`;
+
+      const salesDiv = document.getElementById('salesLogList');
+      if (appData.sales.length === 0) {
+        salesDiv.innerHTML = '<p class="text-slate-400 text-center py-3">Abhi koi bikri record nahi hai.</p>';
+      } else {
+        salesDiv.innerHTML = appData.sales.map(s => `
+          <div class="flex justify-between items-center p-2 border-b">
+            <div>
+              <p class="font-semibold text-slate-700">${s.title}</p>
+              <p class="text-[10px] text-slate-400">${s.date}</p>
+            </div>
+            <div class="text-right">
+              <p class="font-bold text-slate-800">₹${s.salePrice}</p>
+              <p class="text-emerald-600 font-bold text-[10px]">+₹${s.profit} Profit</p>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    // Bottom Navigation Switching
+    function switchTab(tab) {
+      document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('nav button').forEach(el => {
+        el.classList.remove('text-blue-600', 'font-bold');
+        el.classList.add('text-slate-500', 'font-semibold');
+      });
+
+      if (tab === 'repair') {
+        document.getElementById('viewRepair').classList.remove('hidden');
+        document.getElementById('navRepair').className = "flex flex-col items-center text-blue-600 font-bold text-[11px]";
+      } else if (tab === 'stock') {
+        document.getElementById('viewStock').classList.remove('hidden');
+        document.getElementById('navStock').className = "flex flex-col items-center text-blue-600 font-bold text-[11px]";
+      } else if (tab === 'report') {
+        document.getElementById('viewReport').classList.remove('hidden');
+        document.getElementById('navReport').className = "flex flex-col items-center text-blue-600 font-bold text-[11px]";
+      }
+    }
+  </script>
+</body>
+</html>
